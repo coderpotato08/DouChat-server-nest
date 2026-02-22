@@ -1,0 +1,4 @@
+db:
+  mongo:
+    name: 'chat_db_v2.production'
+    uri: 'mongodb://localhost:27017/chat_db_v2'
