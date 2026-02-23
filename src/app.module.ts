@@ -5,6 +5,9 @@ import { CatModule } from './modules/cat/cat.module';
 import { UserModule } from './modules/users/user.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './modules/auth/auth.module';
+import { AuthController } from './modules/auth/auth.controller';
+import { AuthService } from './modules/auth/auth.service';
 import configuration from './configuration';
 
 @Module({
@@ -16,8 +19,9 @@ import configuration from './configuration';
     MongooseModule.forRoot('mongodb://localhost:27017/chat_db_v2'),
     CatModule,
     UserModule,
+    AuthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, AuthController],
+  providers: [AppService, AuthService],
 })
 export class AppModule {}

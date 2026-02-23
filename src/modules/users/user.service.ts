@@ -10,4 +10,8 @@ export class UserService {
   async findUserById(userId: string): Promise<User | null> {
     return this.userModel.findById(userId).lean().exec();
   }
+
+  async findByUsername(username: string): Promise<User | null> {
+    return this.userModel.findOne({ username }).lean().exec();
+  }
 }
