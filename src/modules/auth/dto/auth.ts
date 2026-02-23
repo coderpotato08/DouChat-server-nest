@@ -32,5 +32,4 @@ export class AuthRegisterDto extends AuthLoginDto {
 
   @IsEmail()
   email: string;
-
 }

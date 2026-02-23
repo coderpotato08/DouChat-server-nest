@@ -34,7 +34,7 @@ export class UserService {
     const newUserList = await Promise.all(
       userList.map(async (userInfo: User) => {
         const existfriend = await this.friendsService.findFriendRelation(
-          userInfo._id.toString(),
+          (userInfo as UserDocument)._id.toString(),
           currUserId,
         );
         return {
