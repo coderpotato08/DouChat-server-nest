@@ -11,3 +11,13 @@ export class UserQueryDto {
   @MinLength(3)
   username: string;
 }
+
+export class SearchUserDto {
+  @IsString()
+  @IsNotEmpty()
+  keyWord: string;
+
+  @IsString()
+  @IsNotEmpty()
+  currUserId: string;
+}

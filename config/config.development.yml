@@ -2,3 +2,4 @@ db:
   mongo:
     name: 'chat_db_v2.development'
     uri: 'mongodb://localhost:27017/chat_db_v2'
+JWT_SECRET: '7f8a3b1e9c2d4f6a8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2'
