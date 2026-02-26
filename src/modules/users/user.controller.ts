@@ -1,19 +1,17 @@
 import {
   Body,
-  ClassSerializerInterceptor,
   Controller,
   Post,
   Req,
   UseGuards,
-  UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserQueryDto, SearchUserDto } from './dto/user.query';
 import { ConfigService } from '@nestjs/config';
-import { AdminGuard } from '../../guards/admin.guard';
 import { JwtGuard } from 'src/guards/jwt.guard';
-import { TransformInterceptor } from '../../interceptor/transform.interceptor';
+import { JsonTransform } from 'src/decorator/json-transform';
+import { User } from '../../schema/user.schema';
 
 @Controller('user')
 // @UseInterceptors(ClassSerializerInterceptor)
@@ -24,9 +22,9 @@ export class UserController {
   ) {}
 
   @Post('/loadUserInfo')
-  @UseGuards(AdminGuard)
+  @JsonTransform(User)
   findUserById(
-    @Body(new ValidationPipe({ transform: true })) body: Partial<UserQueryDto>,
+    @Body(new ValidationPipe({ transform: true })) body: UserQueryDto,
   ) {
     return this.userService.findUserById(body.userId!);
   }
@@ -37,8 +35,7 @@ export class UserController {
    * 1. 装饰器的执行顺序是由下到上执行的
    * 2. @UseGuards 可以传递多个守卫，执行顺序则是从前往后依次执行，如果前面的Guard没有通过，后面的Guard也不会执行
    */
-  @UseGuards(JwtGuard, AdminGuard)
-  @UseInterceptors(TransformInterceptor)
+  @UseGuards(JwtGuard)
   searchUser(
     @Body(new ValidationPipe({ transform: true })) body: SearchUserDto,
     /** jwtModule会在req中注入user，也就是jwt中的payload信息

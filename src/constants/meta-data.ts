@@ -1,0 +1,1 @@
+export const JSON_TRANSFORM_METADATA_KEY = '__json_transform__';

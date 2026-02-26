@@ -1,11 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Exclude } from 'class-transformer';
+import { Transform, Exclude } from 'class-transformer';
 import { HydratedDocument, Types } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true })
 export class User {
+  @Transform(({ value }) => (value instanceof Types.ObjectId ? value.toString() : value), {
+    toPlainOnly: true,
+  })
+  _id: Types.ObjectId;
   @Prop({
     required: true,
     unique: true,
@@ -20,11 +24,11 @@ export class User {
   })
   nickname?: string;
 
+  @Exclude()
   @Prop({
     required: true,
     minlength: 8,
   })
-  @Exclude()
   password: string;
 
   @Prop({ default: '' })

@@ -4,9 +4,12 @@ import { AppService } from './app.service';
 import { CatModule } from './modules/cat/cat.module';
 import { UserModule } from './modules/users/user.module';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import configuration from './configuration';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TransformInterceptor } from './interceptor/transform.interceptor';
+import { AdminGuard } from './guards/admin.guard';
 
 @Module({
   imports: [
@@ -14,12 +17,30 @@ import configuration from './configuration';
       isGlobal: true,
       load: [configuration],
     }),
-    MongooseModule.forRoot('mongodb://localhost:27017/chat_db_v2'),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => {
+        return {
+          uri: configService.get<string>('db.mongo.uri'),
+        };
+      },
+      inject: [ConfigService],
+    }),
     CatModule,
     UserModule,
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AdminGuard,
+    },
+    AppService,
+  ],
 })
 export class AppModule {}
