@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CatModule } from './modules/cat/cat.module';
 import { UserModule } from './modules/users/user.module';
+import { FriendsModule } from './modules/friends/friends.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
@@ -29,6 +30,7 @@ import { AdminGuard } from './guards/admin.guard';
     CatModule,
     UserModule,
     AuthModule,
+    FriendsModule,
   ],
   controllers: [AppController],
   providers: [
