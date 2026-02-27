@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import { toObjectId } from 'src/utils/format';
 
 export type FriendDocument = HydratedDocument<Friend>;
 
@@ -11,7 +12,7 @@ export class Friend {
     required: true,
     type: Types.ObjectId,
     ref: 'User',
-    set: (v: string | Types.ObjectId) => v instanceof Types.ObjectId ? v : new Types.ObjectId(v),
+    set: toObjectId,
   })
   userId: Types.ObjectId;
 
@@ -19,7 +20,7 @@ export class Friend {
     required: true,
     type: Types.ObjectId,
     ref: 'User',
-    set: (v: string | Types.ObjectId) => v instanceof Types.ObjectId ? v : new Types.ObjectId(v),
+    set: toObjectId,
   })
   friendId: Types.ObjectId;
 }

@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { ApplyStatusEnum } from 'src/enum/response.enum';
+import { toObjectId } from 'src/utils/format';
 
 export type FriendNotificationDocument = HydratedDocument<FriendNotification>;
 
@@ -12,7 +13,7 @@ export class FriendNotification {
     required: true,
     type: Types.ObjectId,
     ref: 'User',
-    set: (v: string | Types.ObjectId) => v instanceof Types.ObjectId ? v : new Types.ObjectId(v),
+    set: toObjectId,
   })
   userId: Types.ObjectId;
 
@@ -20,7 +21,7 @@ export class FriendNotification {
     required: true,
     type: Types.ObjectId,
     ref: 'User',
-    set: (v: string | Types.ObjectId) => v instanceof Types.ObjectId ? v : new Types.ObjectId(v),
+    set: toObjectId,
   })
   friendId: Types.ObjectId;
 
