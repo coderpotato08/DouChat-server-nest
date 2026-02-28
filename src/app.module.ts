@@ -11,6 +11,7 @@ import configuration from './configuration';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TransformInterceptor } from './interceptor/transform.interceptor';
 import { AdminGuard } from './guards/admin.guard';
+import { EventModule } from './modules/event/event.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AdminGuard } from './guards/admin.guard';
     UserModule,
     AuthModule,
     FriendsModule,
+    EventModule,
   ],
   controllers: [AppController],
   providers: [
