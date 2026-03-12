@@ -2,21 +2,24 @@ import {
   Body,
   Controller,
   Post,
-  Req,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { UserQueryDto, SearchUserDto } from './dto/user.query';
+import {
+  UserQueryDto,
+  SearchUserDto,
+  LoadFriendListDto,
+} from './dto/user.query';
 import { ConfigService } from '@nestjs/config';
 import { JwtGuard } from 'src/guards/jwt.guard';
 import { JsonTransform } from 'src/decorator/json-transform';
 import { User } from '../../schema/user.schema';
-import { FriendsCreateDto } from '../friends/dto/friends.create';
+import { addFriendDto } from '../friends/dto/friends.create';
 import { FriendsService } from '../friends/friends.service';
 
+@UseGuards(JwtGuard)
 @Controller('user')
-// @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -48,10 +51,18 @@ export class UserController {
     return this.userService.searchUser(body.keyWord, body.currUserId);
   }
 
-
   @Post('add-friend')
-  async addFriend(@Body() addFriendDto: FriendsCreateDto) {
+  async addFriend(
+    @Body(new ValidationPipe({ transform: true })) addFriendDto: addFriendDto,
+  ) {
     const { userId, friendId } = addFriendDto;
     return this.friendsService.addFriend(userId, friendId);
+  }
+
+  @Post('friend/list')
+  async loadFriendList(
+    @Body(new ValidationPipe({ transform: true })) body: LoadFriendListDto,
+  ) {
+    return this.friendsService.loadFriendList(body.userId);
   }
 }

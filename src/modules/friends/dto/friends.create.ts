@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 import { IsObjectId } from 'src/decorator/is-objectid.decorator';
 
-export class FriendsCreateDto {
+export class addFriendDto {
   @IsNotEmpty({ message: 'userId不能为空' })
   @IsString()
   @IsObjectId({ message: 'userId必须是有效的ObjectId' })

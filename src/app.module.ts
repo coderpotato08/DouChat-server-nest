@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CatModule } from './modules/cat/cat.module';
 import { UserModule } from './modules/users/user.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -28,7 +27,6 @@ import { EventModule } from './modules/event/event.module';
       },
       inject: [ConfigService],
     }),
-    CatModule,
     UserModule,
     AuthModule,
     FriendsModule,

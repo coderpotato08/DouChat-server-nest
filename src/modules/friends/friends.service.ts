@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Friend, FriendDocument } from 'src/schema/friend.schema';
 import {
@@ -66,6 +66,43 @@ export class FriendsService {
         status: 'success',
         message: ErrorMessage.Friends.APPLY_SUCCESS,
       };
+    }
+  }
+
+  async loadFriendList(userId: string) {
+    try {
+      const friendList = await this.friendModel
+        .find({
+          $or: [
+            { friendId: new Types.ObjectId(userId) },
+            { userId: new Types.ObjectId(userId) },
+          ],
+        })
+        .lean()
+        .populate({
+          path: 'userId',
+          model: 'User',
+          select: ['nickname', 'username', 'avatarImage'],
+        })
+        .populate({
+          path: 'friendId',
+          model: 'User',
+          select: ['nickname', 'username', 'avatarImage'],
+        })
+        .exec();
+
+      return {
+        friendList: friendList.map((item) => {
+          const { friendId: friendInfo, userId: userInfo, ...rest } = item as any;
+          const currentUserIsCreator = userInfo?._id?.toString() === userId;
+          return {
+            ...rest,
+            friendInfo: currentUserIsCreator ? friendInfo : userInfo,
+          };
+        }),
+      };
+    } catch {
+      throw new BadRequestException(ErrorMessage.Common.SERVER_ERROR);
     }
   }
 }

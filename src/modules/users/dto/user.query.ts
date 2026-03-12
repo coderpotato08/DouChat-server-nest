@@ -24,3 +24,10 @@ export class SearchUserDto {
   @IsObjectId({ message: 'currUserId必须是有效的ObjectId' })
   currUserId: string;
 }
+
+export class LoadFriendListDto {
+  @IsString()
+  @IsObjectId({ message: 'userId必须是有效的ObjectId' })
+  @Type(() => String)
+  userId: string;
+}
