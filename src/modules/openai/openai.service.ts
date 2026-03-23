@@ -154,6 +154,7 @@ export class OpenAiService {
 
         if (toolCalls.length) {
           console.log('[openai.completion] tool calls detected');
+          const calledToolNames = new Set<string>();
           for (const toolCall of toolCalls) {
             if (toolCall.type !== 'function') {
               console.log('[openai.completion] skip non-function tool call', {
@@ -163,6 +164,7 @@ export class OpenAiService {
               continue;
             }
 
+            calledToolNames.add(toolCall.function.name);
             let toolResult = 'Unsupported tool';
             console.log('[openai.completion] processing tool call', {
               toolName: toolCall.function.name,
@@ -192,10 +194,26 @@ export class OpenAiService {
             });
           }
 
+          const requiresMessageRecordSummary = calledToolNames.has(
+            'get_message_records',
+          );
+          const requiresFriendsTable = calledToolNames.has(
+            'search_friends_markdown',
+          );
+
           followupMessages.push({
             role: 'user',
-            content:
-              '请严格基于上面的工具返回结果作答。必须输出分析结论，并附上 username、phoneNumber、email 三列的 markdown 表格；禁止说无法访问数据库或API。',
+            content: [
+              '请严格基于上面的工具返回结果作答，禁止说无法访问数据库或API。',
+              requiresMessageRecordSummary
+                ? '如果调用了 get_message_records，请明确说明导出结果中的 filePath、format 和 summary。'
+                : '',
+              requiresFriendsTable
+                ? '如果调用了 search_friends_markdown，请附上 username、phoneNumber、email 三列的 markdown 表格。'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' '),
           });
         }
 

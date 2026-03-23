@@ -27,6 +27,46 @@
   {
     "type": "function",
     "function": {
+      "name": "get_message_records",
+      "description": "Query all message records (single chat and group chat) of a user and export to local temp_file directory. startTime/endTime are constrained to the recent three months. format defaults to md.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "Current user id in Mongo ObjectId format."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Optional ISO datetime start filter (inclusive). If omitted, defaults to three months ago."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Optional ISO datetime end filter (inclusive). If omitted, defaults to now."
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Optional export file name. Defaults to __chat_records_{userId}_{YYYYMMDD}.{format}."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "md"
+            ],
+            "description": "Export file format. Defaults to md."
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "safe_path",
       "description": "Resolve and validate a user provided path inside a sandbox root and return normalized path metadata.",
       "parameters": {

@@ -13,8 +13,8 @@ import { AdminGuard } from './guards/admin.guard';
 import { EventModule } from './modules/event/event.module';
 import { OpenAiModule } from './modules/openai/openai.module';
 import { OpenAiToolsModule } from './modules/openaiTools/openaiTools.module';
-import { GroupModule } from './modules/group/group.module';
 import { MessageModule } from './modules/message/message.module';
+import { GroupModule } from './modules/group/group.module';
 
 @Module({
   imports: [
@@ -35,10 +35,10 @@ import { MessageModule } from './modules/message/message.module';
     AuthModule,
     FriendsModule,
     EventModule,
+    MessageModule,
+    GroupModule,
     OpenAiModule,
     OpenAiToolsModule,
-    GroupModule,
-    MessageModule,
   ],
   controllers: [AppController],
   providers: [

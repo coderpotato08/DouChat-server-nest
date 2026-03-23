@@ -1,10 +1,11 @@
 import { BadGatewayException } from '@nestjs/common';
 import searchFriendsMarkdownHandler from './search_friends_markdown.handler';
+import getMessageRecordsHandler from './get_message_records.handler';
 import { ToolHandler, ToolHandlerDeps } from './types';
 
 const TOOL_HANDLER_MAP: Record<string, ToolHandler> = {
   search_friends_markdown: searchFriendsMarkdownHandler,
-  
+  get_message_records: getMessageRecordsHandler,
 };
 
 export async function executeToolHandler(
