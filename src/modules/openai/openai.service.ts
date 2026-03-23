@@ -8,9 +8,11 @@ import { OpenAiChatDto } from './dto/openai.chat';
 import OpenAI from 'openai';
 import { Observable } from 'rxjs';
 import { OpenAiToolsService } from '../openaiTools/openaiTools.service';
+import { loadChatCompletionTools } from '../openaiTools/tool-definitions.loader';
+import { executeToolHandler } from '../openaiTools/tool-handlers/handler-map';
 
 type OpenAiChatStreamEvent = {
-  type: 'start' | 'delta' | 'done';
+  type: 'start' | 'progress' | 'delta' | 'done';
   content?: string;
   model: string;
   usage?: {
@@ -65,8 +67,9 @@ export class OpenAiService {
             {
               role: 'system',
               content:
-                payload.systemPrompt ||
-                'You are a helpful assistant. Use tools when needed.',
+                (payload.systemPrompt ||
+                  'You are a helpful assistant. Use tools when needed.') +
+                ' If tools are provided, do not claim you cannot access data. You must call tools first and answer based on tool results.',
             },
             {
               role: 'user',
@@ -83,30 +86,21 @@ export class OpenAiService {
             }
           | undefined;
 
-        const toolDefinition: OpenAI.Chat.Completions.ChatCompletionTool = {
-          type: 'function',
-          function: {
-            name: 'search_friends_markdown',
-            description:
-              'Search current user friends and return a markdown table with username, phoneNumber and email.',
-            parameters: {
-              type: 'object',
-              properties: {
-                keyWord: {
-                  type: 'string',
-                  description:
-                    'Keyword used for fuzzy search by nickname or username.',
-                },
-                currUserId: {
-                  type: 'string',
-                  description: 'Current user id in Mongo ObjectId format.',
-                },
-              },
-              required: ['keyWord', 'currUserId'],
-              additionalProperties: false,
-            },
-          },
-        };
+        const toolDefinitions = await loadChatCompletionTools((progress) => {
+          subscriber.next({
+            type: 'progress',
+            model,
+            content: `[tool-loader/${progress.stage}] ${progress.message}`,
+          });
+        });
+        console.log('[openai.completion] loaded tool definitions', {
+          count: toolDefinitions.length,
+          names: toolDefinitions
+            .map((tool) =>
+              tool.type === 'function' ? tool.function.name : 'unknown',
+            )
+            .filter(Boolean),
+        });
 
         let firstCompletion: Awaited<
           ReturnType<typeof client.chat.completions.create>
@@ -120,11 +114,13 @@ export class OpenAiService {
               max_tokens: payload.maxTokens,
               messages: baseMessages,
               tool_choice: 'auto',
-              tools: [toolDefinition],
+              tools: toolDefinitions,
             },
             { signal: abortController.signal },
           );
+          console.log('[openai.completion] first completion received');
         } catch (error) {
+          console.error('[openai.completion] first completion failed', error);
           if (error instanceof OpenAI.APIError) {
             subscriber.error(
               new BadGatewayException(
@@ -139,6 +135,11 @@ export class OpenAiService {
 
         const assistantMessage = firstCompletion.choices?.[0]?.message;
         const toolCalls = assistantMessage?.tool_calls ?? [];
+        console.log('[openai.completion] first message summary', {
+          hasAssistantMessage: !!assistantMessage,
+          toolCallCount: toolCalls.length,
+          finishReason: firstCompletion.choices?.[0]?.finish_reason,
+        });
 
         const followupMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
           [...baseMessages];
@@ -152,44 +153,50 @@ export class OpenAiService {
         }
 
         if (toolCalls.length) {
+          console.log('[openai.completion] tool calls detected');
           for (const toolCall of toolCalls) {
             if (toolCall.type !== 'function') {
+              console.log('[openai.completion] skip non-function tool call', {
+                toolCallId: toolCall.id,
+                toolType: toolCall.type,
+              });
               continue;
             }
 
             let toolResult = 'Unsupported tool';
-
-            if (toolCall.function.name === 'search_friends_markdown') {
-              try {
-                const args = JSON.parse(
-                  toolCall.function.arguments || '{}',
-                ) as {
-                  keyWord?: string;
-                  currUserId?: string;
-                };
-
-                if (args.keyWord && args.currUserId) {
-                  const result =
-                    await this.openAiToolsService.searchFriendsAsMarkdown({
-                      keyWord: args.keyWord,
-                      currUserId: args.currUserId,
-                    });
-                  toolResult = result.markdown;
-                } else {
-                  toolResult =
-                    'Invalid arguments. Expected { keyWord: string, currUserId: string }.';
-                }
-              } catch {
-                toolResult = 'Failed to parse tool arguments as JSON.';
-              }
-            }
+            console.log('[openai.completion] processing tool call', {
+              toolName: toolCall.function.name,
+              toolCallId: toolCall.id,
+            });
+            console.log('[openai.completion] executing tool', {
+              toolName: toolCall.function.name,
+              toolCallId: toolCall.id,
+            });
+            toolResult = await executeToolHandler(
+              toolCall.function.name,
+              toolCall.function.arguments,
+              {
+                openAiToolsService: this.openAiToolsService,
+              },
+            );
 
             followupMessages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
               content: toolResult,
             });
+            console.log('[openai.completion] tool message appended', {
+              toolCallId: toolCall.id,
+              toolName: toolCall.function.name,
+              content: toolResult,
+            });
           }
+
+          followupMessages.push({
+            role: 'user',
+            content:
+              '请严格基于上面的工具返回结果作答。必须输出分析结论，并附上 username、phoneNumber、email 三列的 markdown 表格；禁止说无法访问数据库或API。',
+          });
         }
 
         subscriber.next({
@@ -198,6 +205,9 @@ export class OpenAiService {
         });
 
         if (!toolCalls.length) {
+          console.log(
+            '[openai.completion] no tool call, return first response',
+          );
           const content = assistantMessage?.content;
           if (content) {
             subscriber.next({
@@ -220,11 +230,17 @@ export class OpenAiService {
             model,
             usage,
           });
+          console.log('[openai.completion] done without tool follow-up', {
+            usage,
+          });
           subscriber.complete();
           return;
         }
 
         try {
+          console.log('[openai.completion] request messages (follow-up)', {
+            messages: followupMessages,
+          });
           stream = await client.chat.completions.create(
             {
               model,
@@ -234,7 +250,9 @@ export class OpenAiService {
             },
             { signal: abortController.signal },
           );
+          console.log('[openai.completion] follow-up stream started');
         } catch (error) {
+          console.error('[openai.completion] follow-up request failed', error);
           if (error instanceof OpenAI.APIError) {
             subscriber.error(
               new BadGatewayException(
@@ -250,9 +268,11 @@ export class OpenAiService {
         }
 
         try {
+          let responseFinalContent = '';
           for await (const chunk of stream) {
             const delta = chunk.choices?.[0]?.delta?.content;
             if (delta) {
+              responseFinalContent += delta;
               subscriber.next({
                 type: 'delta',
                 content: delta,
@@ -268,7 +288,11 @@ export class OpenAiService {
               };
             }
           }
+          console.log('[openai.completion] follow-up stream completed', {
+            content: responseFinalContent,
+          });
         } catch (error) {
+          console.error('[openai.completion] stream failed', error);
           if (error instanceof OpenAI.APIError) {
             subscriber.error(
               new BadGatewayException(
@@ -286,8 +310,14 @@ export class OpenAiService {
           model,
           usage,
         });
+        console.log('[openai.completion] done with tool follow-up', {
+          usage,
+        });
         subscriber.complete();
       })().catch(() => {
+        console.error(
+          '[openai.completion] unexpected failure in completion task',
+        );
         subscriber.error(new BadGatewayException('OpenAI stream failed'));
       });
 

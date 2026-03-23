@@ -16,9 +16,7 @@ export interface FriendTableRow {
 export class OpenAiToolsService {
   constructor(private readonly userService: UserService) {}
 
-  async searchFriendsAsMarkdown(
-    input: SearchFriendsInput,
-  ): Promise<{
+  async searchFriendsAsMarkdown(input: SearchFriendsInput): Promise<{
     count: number;
     rows: FriendTableRow[];
     markdown: string;
@@ -28,13 +26,11 @@ export class OpenAiToolsService {
       input.currUserId,
     );
 
-    const rows = result.userList
-      .filter((user) => user.isFriend)
-      .map((user) => ({
-        username: user.username || '-',
-        phoneNumber: user.phoneNumber || '-',
-        email: user.email || '-',
-      }));
+    const rows = result.userList.map((user) => ({
+      username: user.username || '-',
+      phoneNumber: user.phoneNumber || '-',
+      email: user.email || '-',
+    }));
 
     return {
       count: rows.length,
@@ -52,9 +48,7 @@ export class OpenAiToolsService {
     }
 
     const body = rows
-      .map(
-        (row) => `| ${row.username} | ${row.phoneNumber} | ${row.email} |`,
-      )
+      .map((row) => `| ${row.username} | ${row.phoneNumber} | ${row.email} |`)
       .join('\n');
 
     return [header, separator, body].join('\n');

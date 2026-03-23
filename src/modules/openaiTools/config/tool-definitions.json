@@ -1,0 +1,140 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "search_friends_markdown",
+      "description": "Search current user friends and return a markdown table with username, phoneNumber and email.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyWord": {
+            "type": "string",
+            "description": "Keyword used for fuzzy search by nickname or username."
+          },
+          "currUserId": {
+            "type": "string",
+            "description": "Current user id in Mongo ObjectId format."
+          }
+        },
+        "required": [
+          "keyWord",
+          "currUserId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "safe_path",
+      "description": "Resolve and validate a user provided path inside a sandbox root and return normalized path metadata.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "User provided relative or absolute path to validate."
+          },
+          "sandboxRoot": {
+            "type": "string",
+            "description": "Sandbox root directory used as security boundary."
+          }
+        },
+        "required": [
+          "inputPath",
+          "sandboxRoot"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_bash",
+      "description": "Run a local bash command in a controlled working directory and return stdout/stderr/exitCode.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Bash command to execute."
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Working directory where command is executed."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "description": "Execution timeout in milliseconds.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_read",
+      "description": "Read a local text file and return file content or selected lines.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "Absolute or sandbox-relative file path."
+          },
+          "startLine": {
+            "type": "integer",
+            "description": "1-based start line for partial reads.",
+            "minimum": 1
+          },
+          "endLine": {
+            "type": "integer",
+            "description": "1-based inclusive end line for partial reads.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "filePath"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_write",
+      "description": "Write text content to a local file, optionally with append mode.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "Absolute or sandbox-relative file path."
+          },
+          "content": {
+            "type": "string",
+            "description": "Text content to write."
+          },
+          "append": {
+            "type": "boolean",
+            "description": "If true, append to file instead of overwrite."
+          }
+        },
+        "required": [
+          "filePath",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]
