@@ -11,6 +11,8 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TransformInterceptor } from './interceptor/transform.interceptor';
 import { AdminGuard } from './guards/admin.guard';
 import { EventModule } from './modules/event/event.module';
+import { OpenAiModule } from './modules/openai/openai.module';
+import { OpenAiToolsModule } from './modules/openaiTools/openaiTools.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { EventModule } from './modules/event/event.module';
     AuthModule,
     FriendsModule,
     EventModule,
+    OpenAiModule,
+    OpenAiToolsModule,
   ],
   controllers: [AppController],
   providers: [

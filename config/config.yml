@@ -1,3 +1,7 @@
 base:
   data_a: '@@@@'
   data_b: '#####'
+openai:
+  apiKey: 'sk-f13366e145504bcb84b2df2c256c73a7'
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  model: 'qwen-coder-turbo-0919'
