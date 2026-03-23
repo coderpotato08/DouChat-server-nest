@@ -13,6 +13,8 @@ import { AdminGuard } from './guards/admin.guard';
 import { EventModule } from './modules/event/event.module';
 import { OpenAiModule } from './modules/openai/openai.module';
 import { OpenAiToolsModule } from './modules/openaiTools/openaiTools.module';
+import { GroupModule } from './modules/group/group.module';
+import { MessageModule } from './modules/message/message.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { OpenAiToolsModule } from './modules/openaiTools/openaiTools.module';
     EventModule,
     OpenAiModule,
     OpenAiToolsModule,
+    GroupModule,
+    MessageModule,
   ],
   controllers: [AppController],
   providers: [
