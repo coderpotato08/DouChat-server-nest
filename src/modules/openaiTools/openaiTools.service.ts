@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { exec } from 'node:child_process';
+import { dirname, extname, isAbsolute, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { Model, Types } from 'mongoose';
 import { Observable } from 'rxjs';
 import {
@@ -72,6 +74,31 @@ type ExportConversation = {
   messages: ExportMessage[];
 };
 
+const execAsync = promisify(exec);
+
+export interface SafePathInput {
+  inputPath: string;
+  sandboxRoot: string;
+}
+
+export interface RunBashInput {
+  command: string;
+  cwd?: string;
+  timeoutMs?: number;
+}
+
+export interface RunReadInput {
+  filePath: string;
+  startLine?: number;
+  endLine?: number;
+}
+
+export interface RunWriteInput {
+  filePath: string;
+  content: string;
+  append?: boolean;
+}
+
 @Injectable()
 export class OpenAiToolsService {
   constructor(
@@ -128,6 +155,132 @@ export class OpenAiToolsService {
     return [header, separator, body].join('\n');
   }
 
+  async safePath(input: SafePathInput): Promise<string> {
+    if (!input.inputPath || !input.sandboxRoot) {
+      throw new Error('inputPath and sandboxRoot are required.');
+    }
+
+    const sandboxRoot = resolve(input.sandboxRoot);
+    const resolvedPath = isAbsolute(input.inputPath)
+      ? resolve(input.inputPath)
+      : resolve(sandboxRoot, input.inputPath);
+
+    const sandboxWithSep = `${sandboxRoot}/`;
+    const isWithinSandbox =
+      resolvedPath === sandboxRoot || resolvedPath.startsWith(sandboxWithSep);
+
+    if (!isWithinSandbox) {
+      throw new Error('Path is outside sandbox root.');
+    }
+
+    return resolvedPath;
+  }
+
+  async runBash(input: RunBashInput): Promise<{
+    command: string;
+    cwd: string;
+    timeoutMs: number;
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+  }> {
+    if (!input.command?.trim()) {
+      throw new Error('command is required.');
+    }
+
+    const cwd = input.cwd ? resolve(input.cwd) : process.cwd();
+    const timeoutMs =
+      input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 10000;
+
+    try {
+      const { stdout, stderr } = await execAsync(input.command, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 1024 * 1024,
+      });
+      return {
+        command: input.command,
+        cwd,
+        timeoutMs,
+        stdout,
+        stderr,
+        exitCode: 0,
+      };
+    } catch (error: any) {
+      return {
+        command: input.command,
+        cwd,
+        timeoutMs,
+        stdout: error?.stdout || '',
+        stderr: error?.stderr || error?.message || 'run_bash failed',
+        exitCode: typeof error?.code === 'number' ? error.code : 1,
+      };
+    }
+  }
+
+  async runRead(input: RunReadInput): Promise<{
+    filePath: string;
+    startLine?: number;
+    endLine?: number;
+    content: string;
+  }> {
+    if (!input.filePath?.trim()) {
+      throw new Error('filePath is required.');
+    }
+
+    const filePath = resolve(input.filePath);
+    const raw = await readFile(filePath, 'utf-8');
+
+    if (!input.startLine && !input.endLine) {
+      return {
+        filePath,
+        content: raw,
+      };
+    }
+
+    const startLine =
+      input.startLine && input.startLine > 0 ? input.startLine : 1;
+    const lines = raw.split('\n');
+    const endLine =
+      input.endLine && input.endLine >= startLine
+        ? input.endLine
+        : lines.length;
+
+    const content = lines.slice(startLine - 1, endLine).join('\n');
+    return {
+      filePath,
+      startLine,
+      endLine,
+      content,
+    };
+  }
+
+  async runWrite(input: RunWriteInput): Promise<{
+    filePath: string;
+    append: boolean;
+    bytesWritten: number;
+  }> {
+    if (!input.filePath?.trim()) {
+      throw new Error('filePath is required.');
+    }
+
+    const filePath = resolve(input.filePath);
+    const append = !!input.append;
+    await mkdir(dirname(filePath), { recursive: true });
+
+    if (append) {
+      await appendFile(filePath, input.content, 'utf-8');
+    } else {
+      await writeFile(filePath, input.content, 'utf-8');
+    }
+
+    return {
+      filePath,
+      append,
+      bytesWritten: Buffer.byteLength(input.content, 'utf-8'),
+    };
+  }
+
   async getMessageRecords(input: GetMessageRecordsInput): Promise<{
     filePath: string;
     format: 'json' | 'md';
@@ -163,10 +316,10 @@ export class OpenAiToolsService {
     }
 
     const startDate = parsedStartDate
-      ? new Date(Math.max(parsedStartDate.getTime(), threeMonthsAgo.getTime()))
+      ? new Date(Math.min(parsedStartDate.getTime(), threeMonthsAgo.getTime()))
       : threeMonthsAgo;
     const endDate = parsedEndDate
-      ? new Date(Math.min(parsedEndDate.getTime(), now.getTime()))
+      ? new Date(Math.max(parsedEndDate.getTime(), now.getTime()))
       : now;
 
     if (startDate.getTime() > endDate.getTime()) {
@@ -182,6 +335,8 @@ export class OpenAiToolsService {
     if (!requester) {
       throw new Error('User not found.');
     }
+
+    console.log(`[getMessageRecords] : startDate: ${startDate}, endDate: ${endDate}`);
 
     const singleConversations = await this.buildSingleConversations(
       userObjectId,

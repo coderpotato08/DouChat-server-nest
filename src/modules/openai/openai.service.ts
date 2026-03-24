@@ -77,7 +77,6 @@ export class OpenAiService {
             },
           ];
 
-        let stream: Awaited<ReturnType<typeof client.chat.completions.create>>;
         let usage:
           | {
               prompt_tokens?: number;
@@ -85,6 +84,7 @@ export class OpenAiService {
               total_tokens?: number;
             }
           | undefined;
+        const maxToolRounds = 8;
 
         const toolDefinitions = await loadChatCompletionTools((progress) => {
           subscriber.next({
@@ -93,88 +93,94 @@ export class OpenAiService {
             content: `[tool-loader/${progress.stage}] ${progress.message}`,
           });
         });
-        console.log('[openai.completion] loaded tool definitions', {
-          count: toolDefinitions.length,
-          names: toolDefinitions
-            .map((tool) =>
-              tool.type === 'function' ? tool.function.name : 'unknown',
-            )
-            .filter(Boolean),
+
+        const loopMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+          [...baseMessages];
+        let stream: Awaited<ReturnType<typeof client.chat.completions.create>>;
+        let reachedNoToolRound = false;
+
+        subscriber.next({
+          type: 'start',
+          model,
         });
 
-        let firstCompletion: Awaited<
-          ReturnType<typeof client.chat.completions.create>
-        >;
+        for (let round = 0; round < maxToolRounds; round += 1) {
+          let completion: Awaited<
+            ReturnType<typeof client.chat.completions.create>
+          >;
 
-        try {
-          firstCompletion = await client.chat.completions.create(
-            {
-              model,
-              stream: false,
-              max_tokens: payload.maxTokens,
-              messages: baseMessages,
-              tool_choice: 'auto',
-              tools: toolDefinitions,
-            },
-            { signal: abortController.signal },
-          );
-          console.log('[openai.completion] first completion received');
-        } catch (error) {
-          console.error('[openai.completion] first completion failed', error);
-          if (error instanceof OpenAI.APIError) {
-            subscriber.error(
-              new BadGatewayException(
-                `OpenAI request failed (${error.status ?? 'unknown'}): ${error.message}`,
-              ),
+          try {
+            completion = await client.chat.completions.create(
+              {
+                model,
+                stream: false,
+                max_tokens: payload.maxTokens,
+                messages: loopMessages,
+                tool_choice: 'auto',
+                tools: toolDefinitions,
+              },
+              { signal: abortController.signal },
             );
+          } catch (error) {
+            console.error('[openai.completion] completion request failed', {
+              round,
+              error,
+            });
+            if (error instanceof OpenAI.APIError) {
+              subscriber.error(
+                new BadGatewayException(
+                  `OpenAI request failed (${error.status ?? 'unknown'}): ${error.message}`,
+                ),
+              );
+              return;
+            }
+            subscriber.error(new BadGatewayException('OpenAI request failed'));
             return;
           }
-          subscriber.error(new BadGatewayException('OpenAI request failed'));
-          return;
-        }
 
-        const assistantMessage = firstCompletion.choices?.[0]?.message;
-        const toolCalls = assistantMessage?.tool_calls ?? [];
-        console.log('[openai.completion] first message summary', {
-          hasAssistantMessage: !!assistantMessage,
-          toolCallCount: toolCalls.length,
-          finishReason: firstCompletion.choices?.[0]?.finish_reason,
-        });
+          usage = completion.usage
+            ? {
+                prompt_tokens: completion.usage.prompt_tokens,
+                completion_tokens: completion.usage.completion_tokens,
+                total_tokens: completion.usage.total_tokens,
+              }
+            : usage;
 
-        const followupMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-          [...baseMessages];
+          const assistantMessage = completion.choices?.[0]?.message;
+          const toolCalls = assistantMessage?.tool_calls ?? [];
 
-        if (assistantMessage) {
-          followupMessages.push({
-            role: 'assistant',
-            content: assistantMessage.content,
-            tool_calls: assistantMessage.tool_calls,
+          if (!toolCalls.length) {
+            console.log('[openai.completion] loopMessages at round end', {
+              round: round + 1,
+              hasToolCalls: false,
+              messages: loopMessages,
+            });
+            reachedNoToolRound = true;
+            break;
+          }
+
+          if (assistantMessage) {
+            loopMessages.push({
+              role: 'assistant',
+              content: assistantMessage.content,
+              tool_calls: assistantMessage.tool_calls,
+            });
+          }
+
+          subscriber.next({
+            type: 'progress',
+            model,
+            content: `[use tool] round ${round + 1} executing tool call(s) ${toolCalls.map((tc) => (tc as any).function.name).join(', ')}`,
           });
-        }
 
-        if (toolCalls.length) {
-          console.log('[openai.completion] tool calls detected');
           const calledToolNames = new Set<string>();
           for (const toolCall of toolCalls) {
             if (toolCall.type !== 'function') {
-              console.log('[openai.completion] skip non-function tool call', {
-                toolCallId: toolCall.id,
-                toolType: toolCall.type,
-              });
               continue;
             }
 
             calledToolNames.add(toolCall.function.name);
-            let toolResult = 'Unsupported tool';
-            console.log('[openai.completion] processing tool call', {
-              toolName: toolCall.function.name,
-              toolCallId: toolCall.id,
-            });
-            console.log('[openai.completion] executing tool', {
-              toolName: toolCall.function.name,
-              toolCallId: toolCall.id,
-            });
-            toolResult = await executeToolHandler(
+            const toolResult = await executeToolHandler(
               toolCall.function.name,
               toolCall.function.arguments,
               {
@@ -182,14 +188,9 @@ export class OpenAiService {
               },
             );
 
-            followupMessages.push({
+            loopMessages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: toolResult,
-            });
-            console.log('[openai.completion] tool message appended', {
-              toolCallId: toolCall.id,
-              toolName: toolCall.function.name,
               content: toolResult,
             });
           }
@@ -201,103 +202,71 @@ export class OpenAiService {
             'search_friends_markdown',
           );
 
-          followupMessages.push({
-            role: 'user',
-            content: [
-              '请严格基于上面的工具返回结果作答，禁止说无法访问数据库或API。',
-              requiresMessageRecordSummary
-                ? '如果调用了 get_message_records，请明确说明导出结果中的 filePath、format 和 summary。'
-                : '',
-              requiresFriendsTable
-                ? '如果调用了 search_friends_markdown，请附上 username、phoneNumber、email 三列的 markdown 表格。'
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' '),
+          console.log('[openai.completion] loopMessages at round end', {
+            round: round + 1,
+            hasToolCalls: true,
+            messages: loopMessages,
           });
         }
 
-        subscriber.next({
-          type: 'start',
-          model,
-        });
-
-        if (!toolCalls.length) {
-          console.log(
-            '[openai.completion] no tool call, return first response',
-          );
-          const content = assistantMessage?.content;
-          if (content) {
-            subscriber.next({
-              type: 'delta',
-              content,
-              model,
-            });
-          }
-
-          usage = firstCompletion.usage
-            ? {
-                prompt_tokens: firstCompletion.usage.prompt_tokens,
-                completion_tokens: firstCompletion.usage.completion_tokens,
-                total_tokens: firstCompletion.usage.total_tokens,
-              }
-            : undefined;
-
+        if (!reachedNoToolRound) {
           subscriber.next({
-            type: 'done',
+            type: 'progress',
             model,
-            usage,
+            content: `[tool-loop] reached max rounds (${maxToolRounds}), generating final answer from current context`,
           });
-          console.log('[openai.completion] done without tool follow-up', {
-            usage,
-          });
-          subscriber.complete();
-          return;
         }
+
+        const finalMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+          [
+            ...loopMessages,
+            {
+              role: 'user',
+              content:
+                '请基于上面的对话和工具结果给出最终答案，不要再次调用任何工具。',
+            },
+          ];
 
         try {
-          console.log('[openai.completion] request messages (follow-up)', {
-            messages: followupMessages,
-          });
           stream = await client.chat.completions.create(
             {
               model,
               stream: true,
               max_tokens: payload.maxTokens,
-              messages: followupMessages,
+              messages: finalMessages,
             },
             { signal: abortController.signal },
           );
-          console.log('[openai.completion] follow-up stream started');
         } catch (error) {
-          console.error('[openai.completion] follow-up request failed', error);
+          console.error(
+            '[openai.completion] final stream request failed',
+            error,
+          );
           if (error instanceof OpenAI.APIError) {
             subscriber.error(
               new BadGatewayException(
-                `OpenAI follow-up request failed (${error.status ?? 'unknown'}): ${error.message}`,
+                `OpenAI final stream request failed (${error.status ?? 'unknown'}): ${error.message}`,
               ),
             );
             return;
           }
           subscriber.error(
-            new BadGatewayException('OpenAI follow-up request failed'),
+            new BadGatewayException('OpenAI final stream request failed'),
           );
           return;
         }
-
+        let finalContent = '';
         try {
-          let responseFinalContent = '';
           for await (const chunk of stream) {
             const delta = chunk.choices?.[0]?.delta?.content;
             if (delta) {
-              responseFinalContent += delta;
+              finalContent += delta;
               subscriber.next({
                 type: 'delta',
                 content: delta,
                 model: chunk.model || model,
               });
             }
-
             if (chunk.usage) {
               usage = {
                 prompt_tokens: chunk.usage.prompt_tokens,
@@ -306,20 +275,19 @@ export class OpenAiService {
               };
             }
           }
-          console.log('[openai.completion] follow-up stream completed', {
-            content: responseFinalContent,
-          });
         } catch (error) {
-          console.error('[openai.completion] stream failed', error);
+          console.error('[openai.completion] final stream failed', error);
           if (error instanceof OpenAI.APIError) {
             subscriber.error(
               new BadGatewayException(
-                `OpenAI stream failed (${error.status ?? 'unknown'}): ${error.message}`,
+                `OpenAI final stream failed (${error.status ?? 'unknown'}): ${error.message}`,
               ),
             );
             return;
           }
-          subscriber.error(new BadGatewayException('OpenAI stream failed'));
+          subscriber.error(
+            new BadGatewayException('OpenAI final stream failed'),
+          );
           return;
         }
 
@@ -329,6 +297,7 @@ export class OpenAiService {
           usage,
         });
         console.log('[openai.completion] done with tool follow-up', {
+          finalContent,
           usage,
         });
         subscriber.complete();
