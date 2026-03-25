@@ -5,6 +5,11 @@ import safePathHandler from './safe_path.handler';
 import runBashHandler from './run_bash.handler';
 import runReadHandler from './run_read.handler';
 import runWriteHandler from './run_write.handler';
+import todoHandler from './todo.handler';
+import taskCreateHandler from './task_create.handler';
+import taskGetHandler from './task_get.handler';
+import taskListHandler from './task_list.handler';
+import taskUpdateHandler from './task_update.handler';
 import { ToolHandler, ToolHandlerDeps } from './types';
 
 const TOOL_HANDLER_MAP: Record<string, ToolHandler> = {
@@ -14,6 +19,11 @@ const TOOL_HANDLER_MAP: Record<string, ToolHandler> = {
   run_bash: runBashHandler,
   run_read: runReadHandler,
   run_write: runWriteHandler,
+  todo: todoHandler,
+  task_create: taskCreateHandler,
+  task_get: taskGetHandler,
+  task_list: taskListHandler,
+  task_update: taskUpdateHandler,
 };
 
 export async function executeToolHandler(

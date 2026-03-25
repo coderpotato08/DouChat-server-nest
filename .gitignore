@@ -3,6 +3,7 @@
 /node_modules
 /build
 /temp_file
+/temp_task
 /config/config.yml
 
 # Logs

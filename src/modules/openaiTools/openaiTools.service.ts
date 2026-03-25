@@ -25,6 +25,7 @@ import {
 } from 'src/schema/user-message.schema';
 import { User, UserDocument } from 'src/schema/user.schema';
 import { UserService } from '../users/user.service';
+import { Task, taskManager } from './class/task';
 
 export interface SearchFriendsInput {
   keyWord: string;
@@ -99,8 +100,24 @@ export interface RunWriteInput {
   append?: boolean;
 }
 
+export type TodoStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface TodoItemInput {
+  id?: string;
+  text?: string;
+  status?: string;
+}
+
+type TodoItem = {
+  id: string;
+  text: string;
+  status: TodoStatus;
+};
+
 @Injectable()
 export class OpenAiToolsService {
+  private todoItems: TodoItem[] = [];
+
   constructor(
     private readonly userService: UserService,
     @InjectModel(UserContact.name)
@@ -281,6 +298,72 @@ export class OpenAiToolsService {
     };
   }
 
+  todoUpdate(items: TodoItemInput[]): string {
+    if (!Array.isArray(items)) {
+      throw new Error('items must be an array.');
+    }
+    if (items.length > 20) {
+      throw new Error('Max 20 todos allowed');
+    }
+
+    const validated: TodoItem[] = [];
+    let inProgressCount = 0;
+
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i] || {};
+      const itemId = String(item.id ?? i + 1);
+      const text = String(item.text ?? '').trim();
+      const status = String(item.status ?? 'pending').toLowerCase();
+
+      if (!text) {
+        throw new Error(`Item ${itemId}: text required`);
+      }
+      if (!['pending', 'in_progress', 'completed'].includes(status)) {
+        throw new Error(`Item ${itemId}: invalid status '${status}'`);
+      }
+
+      if (status === 'in_progress') {
+        inProgressCount += 1;
+      }
+
+      validated.push({
+        id: itemId,
+        text,
+        status: status as TodoStatus,
+      });
+    }
+
+    if (inProgressCount > 1) {
+      throw new Error('Only one task can be in_progress at a time');
+    }
+
+    this.todoItems = validated;
+    return this.todoRender();
+  }
+
+  todoRender(): string {
+    if (!this.todoItems.length) {
+      return 'No todos.';
+    }
+
+    const lines: string[] = [];
+    for (const item of this.todoItems) {
+      const marker = {
+        pending: '[ ]',
+        in_progress: '[>]',
+        completed: '[x]',
+      }[item.status];
+      lines.push(`${marker} #${item.id}: ${item.text}`);
+    }
+
+    const done = this.todoItems.filter(
+      (item) => item.status === 'completed',
+    ).length;
+    lines.push(`\n(${done}/${this.todoItems.length} completed)`);
+    console.log('[todo] current items:', lines);
+    return lines.join('\n');
+  }
+
   async getMessageRecords(input: GetMessageRecordsInput): Promise<{
     filePath: string;
     format: 'json' | 'md';
@@ -336,7 +419,9 @@ export class OpenAiToolsService {
       throw new Error('User not found.');
     }
 
-    console.log(`[getMessageRecords] : startDate: ${startDate}, endDate: ${endDate}`);
+    console.log(
+      `[getMessageRecords] : startDate: ${startDate}, endDate: ${endDate}`,
+    );
 
     const singleConversations = await this.buildSingleConversations(
       userObjectId,
@@ -708,5 +793,26 @@ export class OpenAiToolsService {
     }
 
     return lines.join('\n');
+  }
+
+  async taskCreate(subject: string, description: string) {
+    return await taskManager.create(subject, description);
+  }
+
+  async taskUpdate(
+    taskId: number,
+    status?: Task['status'],
+    addBlockedBy?: number[],
+    addBlocks?: number[],
+  ) {
+    return await taskManager.update(taskId, status, addBlockedBy, addBlocks);
+  }
+
+  async taskList() {
+    return await taskManager.list();
+  }
+
+  async taskGet(taskId: number) {
+    return await taskManager.get(taskId);
   }
 }

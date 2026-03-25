@@ -10,7 +10,9 @@ import { Observable } from 'rxjs';
 import { OpenAiToolsService } from '../openaiTools/openaiTools.service';
 import { loadChatCompletionTools } from '../openaiTools/tool-definitions.loader';
 import { executeToolHandler } from '../openaiTools/tool-handlers/handler-map';
+import { resolve } from 'node:path';
 
+const WORKSPACE = resolve(__dirname, '../../../');
 type OpenAiChatStreamEvent = {
   type: 'start' | 'progress' | 'delta' | 'done';
   content?: string;
@@ -67,9 +69,8 @@ export class OpenAiService {
             {
               role: 'system',
               content:
-                (payload.systemPrompt ||
-                  'You are a helpful assistant. Use tools when needed.') +
-                ' If tools are provided, do not claim you cannot access data. You must call tools first and answer based on tool results.',
+                payload.systemPrompt ||
+                `You are a coding agent at ${WORKSPACE}. Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done. Prefer tools over prose.`,
             },
             {
               role: 'user',
@@ -150,11 +151,6 @@ export class OpenAiService {
           const toolCalls = assistantMessage?.tool_calls ?? [];
 
           if (!toolCalls.length) {
-            console.log('[openai.completion] loopMessages at round end', {
-              round: round + 1,
-              hasToolCalls: false,
-              messages: loopMessages,
-            });
             reachedNoToolRound = true;
             break;
           }
@@ -180,6 +176,7 @@ export class OpenAiService {
             }
 
             calledToolNames.add(toolCall.function.name);
+            console.log(`[tool-call] executing tool: ${toolCall.function.name}`);
             const toolResult = await executeToolHandler(
               toolCall.function.name,
               toolCall.function.arguments,
@@ -187,7 +184,7 @@ export class OpenAiService {
                 openAiToolsService: this.openAiToolsService,
               },
             );
-
+            console.log(`[tool-call] tool result: ${toolResult.length > 500 ? toolResult.slice(0, 500) + '... (truncated)' : toolResult}`);
             loopMessages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -201,12 +198,6 @@ export class OpenAiService {
           const requiresFriendsTable = calledToolNames.has(
             'search_friends_markdown',
           );
-
-          console.log('[openai.completion] loopMessages at round end', {
-            round: round + 1,
-            hasToolCalls: true,
-            messages: loopMessages,
-          });
         }
 
         if (!reachedNoToolRound) {

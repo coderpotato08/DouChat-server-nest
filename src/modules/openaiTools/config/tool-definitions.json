@@ -224,5 +224,97 @@
         "additionalProperties": false
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_create",
+      "description": "Create a new task in the task board.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_update",
+      "description": "Update task status and dependencies in the task board.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "addBlockedBy": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "addBlocks": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        },
+        "required": [
+          "taskId",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_get",
+      "description": "Get task details from the task board.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "taskId": {}
+        },
+        "required": [
+          "taskId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "task_list",
+      "description": "List all tasks in the task board.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    }
   }
 ]
